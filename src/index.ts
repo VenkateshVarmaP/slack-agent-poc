@@ -1,44 +1,30 @@
-import { App } from "@slack/bolt";
-import { runAgent } from "./agent.js";
+import { salesforceMcp } from "./mcp/salesforce.client.js";
+import { createSlackApp } from "./slack/app.js";
+import { logger } from "./utils/logger.js";
 
-const app = new App({
-  token: process.env.SLACK_BOT_TOKEN,
-  appToken: process.env.SLACK_APP_TOKEN,
-  socketMode: true,
-});
+async function bootstrap(): Promise<void> {
+  try {
+    await salesforceMcp.initialize();
+  } catch (error) {
+    logger.warn(
+      "Could not connect to Salesforce MCP on startup; continuing with local tools only.",
+      { error: error instanceof Error ? error.message : String(error) }
+    );
+  }
 
-app.event("app_mention", async ({ event, client }) => {
-  const { channel, ts, text } = event as {
-    channel: string;
-    ts: string;
-    text: string;
+  const app = createSlackApp();
+  await app.start();
+  logger.info("Slack Agent POC is running!");
+
+  const shutdown = async (signal: string) => {
+    logger.info(`Received ${signal}. Shutting down gracefully...`);
+    await app.stop().catch(() => {});
+    await salesforceMcp.close();
+    process.exit(0);
   };
 
-  try {
-    await client.reactions.add({
-      channel,
-      timestamp: ts,
-      name: "eyes",
-    }).catch(() => {});
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+}
 
-    const cleanedText = text.replace(/<@[^>]+>\s*/g, "");
-
-    const response = await runAgent(cleanedText);
-
-    await client.chat.postMessage({
-      channel,
-      thread_ts: ts,
-      text: response,
-    });
-  } catch (error) {
-    console.error(error);
-    await client.chat.postMessage({
-      channel,
-      thread_ts: ts,
-      text: "Sorry, I encountered an error processing your request.",
-    }).catch(() => {});
-  }
-});
-
-await app.start();
-console.log("Slack Agent POC is running!");
+await bootstrap();
