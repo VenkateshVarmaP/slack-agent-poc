@@ -4,15 +4,18 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
+    "ingest": "tsx --env-file=.env src/rag/ingest.ts",
     "build": "tsc"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@slack/bolt": "^4.0.0",
-    "openai": "^4.0.0"
+    "openai": "^4.0.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }

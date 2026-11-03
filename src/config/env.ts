@@ -7,8 +7,15 @@ export interface AppConfig {
     apiKey: string;
     baseURL: string;
     model: string;
+    embeddingModel: string;
+    embeddingDimensions: number;
     appTitle: string;
     referer: string;
+  };
+  rag: {
+    enabled: boolean;
+    databaseUrl: string | undefined;
+    sslRejectUnauthorized: boolean;
   };
   salesforceMcp: {
     enabled: boolean;
@@ -38,8 +45,16 @@ export const env: AppConfig = {
     apiKey: requireEnv("OPENROUTER_API_KEY"),
     baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     model: process.env.OPENROUTER_MODEL || "openrouter/free",
+    embeddingModel:
+      process.env.EMBEDDING_MODEL || "nvidia/nemotron-3.5-embed-1b:free",
+    embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS || 1024),
     appTitle: process.env.APP_TITLE || "Slack Agent POC",
     referer: process.env.APP_REFERER || "http://localhost:3000",
+  },
+  rag: {
+    enabled: Boolean(process.env.DATABASE_URL) && process.env.RAG_ENABLED !== "false",
+    databaseUrl: process.env.DATABASE_URL,
+    sslRejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === "true",
   },
   salesforceMcp: {
     enabled: process.env.SF_MCP_ENABLED !== "false",
