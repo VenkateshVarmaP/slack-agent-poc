@@ -1,5 +1,9 @@
 import { env } from "../config/env.js";
-import { ingestDocument, searchKnowledgeBase } from "../rag/repository.js";
+import {
+  deleteKnowledgeByTitleOrId,
+  ingestDocument,
+  searchKnowledgeBase,
+} from "../rag/repository.js";
 import type { AgentTool } from "./types.js";
 
 export const searchKnowledgeTool: AgentTool = {
@@ -8,7 +12,7 @@ export const searchKnowledgeTool: AgentTool = {
     function: {
       name: "search_knowledge_base",
       description:
-        "Search the PostgreSQL pgvector knowledge base for company documentation, runbooks, FAQs, and past resolutions using hybrid semantic + keyword search.",
+        "Search the PostgreSQL pgvector knowledge base ONLY for durable institutional knowledge: internal runbooks, troubleshooting guides, architecture decisions, and team policies. Do NOT use this tool for live Salesforce org configurations, active user/profile state, or CRM records (use sf_discover/sf_describe/sf_dispatch_readonly for live org state instead).",
       parameters: {
         type: "object",
         properties: {
@@ -18,7 +22,16 @@ export const searchKnowledgeTool: AgentTool = {
           },
           category: {
             type: "string",
-            description: "Optional category filter (e.g. 'general', 'documentation', 'runbook', 'salesforce').",
+            enum: [
+              "runbook",
+              "troubleshooting",
+              "architecture_decision",
+              "team_policy",
+              "onboarding",
+              "faq",
+              "documentation",
+            ],
+            description: "Optional category filter.",
           },
           topK: {
             type: "number",
@@ -48,7 +61,7 @@ export const saveKnowledgeTool: AgentTool = {
     function: {
       name: "save_to_knowledge_base",
       description:
-        "Save a new note, runbook, FAQ, or troubleshooting resolution into the PostgreSQL pgvector knowledge base for future retrieval.",
+        "Validate and upsert durable institutional knowledge (runbooks, troubleshooting resolutions, architecture decisions, team policies, SLAs) into PostgreSQL pgvector. Existing entries with the same title and source are automatically updated in place. NEVER call this to store live Salesforce org configurations, CRM records, raw source code, or secrets.",
       parameters: {
         type: "object",
         properties: {
@@ -58,11 +71,19 @@ export const saveKnowledgeTool: AgentTool = {
           },
           content: {
             type: "string",
-            description: "Full text content to chunk, embed, and store.",
+            description: "Full text content to validate, chunk, embed, and upsert.",
           },
           category: {
             type: "string",
-            description: "Category tag (e.g., 'general', 'runbook', 'salesforce', 'faq').",
+            enum: [
+              "runbook",
+              "troubleshooting",
+              "architecture_decision",
+              "team_policy",
+              "onboarding",
+              "faq",
+            ],
+            description: "Category tag for the institutional knowledge.",
           },
         },
         required: ["title", "content"],
@@ -72,16 +93,54 @@ export const saveKnowledgeTool: AgentTool = {
   run: async (args) => {
     const title = String(args.title || "Untitled");
     const content = String(args.content || "");
-    const category = String(args.category || "general");
+    const category = args.category ? String(args.category) : undefined;
 
-    const chunksInserted = await ingestDocument({
+    const outcome = await ingestDocument({
       title,
       content,
       source: "slack",
       category,
     });
 
-    return `Successfully saved "${title}" into the knowledge base (${chunksInserted} chunk(s) indexed).`;
+    if (!outcome.accepted) {
+      return `STORAGE_REJECTED: ${outcome.validation.reason}`;
+    }
+
+    return `Successfully validated and upserted "${title}" into the knowledge base under category '${outcome.category}' (${outcome.chunksInserted} chunk(s) indexed).`;
+  },
+};
+
+export const deleteKnowledgeTool: AgentTool = {
+  spec: {
+    type: "function",
+    function: {
+      name: "delete_from_knowledge_base",
+      description:
+        "Delete outdated, superseded, or incorrect institutional knowledge entries from the PostgreSQL pgvector knowledge base by ID or title.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "number",
+            description: "Exact numeric chunk ID to delete (from search_knowledge_base results).",
+          },
+          titleQuery: {
+            type: "string",
+            description: "Case-insensitive title substring to match and delete.",
+          },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    const id = args.id !== undefined ? Number(args.id) : undefined;
+    const titleQuery = args.titleQuery ? String(args.titleQuery) : undefined;
+
+    const deletedCount = await deleteKnowledgeByTitleOrId({ id, titleQuery });
+    if (deletedCount === 0) {
+      return "No matching knowledge base entries found to delete.";
+    }
+    return `Deleted ${deletedCount} knowledge base entry/entries.`;
   },
 };
 
@@ -93,5 +152,6 @@ export function getRagTools(): Record<string, AgentTool> {
   return {
     search_knowledge_base: searchKnowledgeTool,
     save_to_knowledge_base: saveKnowledgeTool,
+    delete_from_knowledge_base: deleteKnowledgeTool,
   };
 }

@@ -24,14 +24,22 @@ async function runIngestion(): Promise<void> {
       const content = await fs.readFile(fullPath, "utf8");
       const title = path.basename(file.name, path.extname(file.name));
 
-      const chunksCount = await ingestDocument({
+      const outcome = await ingestDocument({
         title,
         content,
         source: `docs/${file.name}`,
-        category: "documentation",
       });
 
-      logger.info(`Ingested ${file.name}`, { chunksCount });
+      if (outcome.accepted) {
+        logger.info(`Ingested ${file.name}`, {
+          category: outcome.category,
+          chunksCount: outcome.chunksInserted,
+        });
+      } else {
+        logger.warn(`Skipped ${file.name} (rejected by RAG governance)`, {
+          reason: outcome.validation.reason,
+        });
+      }
     }
   } finally {
     await closeRagDatabase();

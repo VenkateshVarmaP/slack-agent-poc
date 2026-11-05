@@ -40,7 +40,7 @@ class SalesforceMcpManager {
       command: "npx",
       args: [
         "-y",
-        "mcp-remote@latest",
+        "mcp-remote@0.1.36",
         env.salesforceMcp.serverUrl,
         env.salesforceMcp.callbackPort,
         "--static-oauth-client-info",

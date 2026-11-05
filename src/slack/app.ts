@@ -1,5 +1,6 @@
 import { App } from "@slack/bolt";
 import { env } from "../config/env.js";
+import { registerApprovalActionHandlers } from "./handlers/approval.handler.js";
 import { registerAppMentionHandler } from "./handlers/mention.handler.js";
 
 export function createSlackApp(): App {
@@ -10,6 +11,7 @@ export function createSlackApp(): App {
   });
 
   registerAppMentionHandler(app);
+  registerApprovalActionHandlers(app);
 
   return app;
 }

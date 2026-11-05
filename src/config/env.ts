@@ -2,11 +2,14 @@ export interface AppConfig {
   slack: {
     botToken: string;
     appToken: string;
+    adminUserIds: string[];
+    requireApprovalForWrites: boolean;
   };
   llm: {
     apiKey: string;
     baseURL: string;
     model: string;
+    fallbackModel: string;
     embeddingModel: string;
     embeddingDimensions: number;
     appTitle: string;
@@ -25,6 +28,8 @@ export interface AppConfig {
   };
   agent: {
     maxSteps: number;
+    maxToolOutputChars: number;
+    maxThreadMessages: number;
   };
 }
 
@@ -40,11 +45,19 @@ export const env: AppConfig = {
   slack: {
     botToken: requireEnv("SLACK_BOT_TOKEN"),
     appToken: requireEnv("SLACK_APP_TOKEN"),
+    adminUserIds: (process.env.SLACK_ADMIN_USER_IDS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    requireApprovalForWrites:
+      process.env.SLACK_REQUIRE_APPROVAL_FOR_WRITES !== "false",
   },
   llm: {
     apiKey: requireEnv("OPENROUTER_API_KEY"),
     baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     model: process.env.OPENROUTER_MODEL || "openrouter/free",
+    fallbackModel:
+      process.env.OPENROUTER_FALLBACK_MODEL || "openrouter/free",
     embeddingModel:
       process.env.EMBEDDING_MODEL || "nvidia/nemotron-3.5-embed-1b:free",
     embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS || 1024),
@@ -68,5 +81,7 @@ export const env: AppConfig = {
   },
   agent: {
     maxSteps: Number(process.env.AGENT_MAX_STEPS || 8),
+    maxToolOutputChars: Number(process.env.AGENT_MAX_TOOL_OUTPUT_CHARS || 12000),
+    maxThreadMessages: Number(process.env.AGENT_MAX_THREAD_MESSAGES || 10),
   },
 };
