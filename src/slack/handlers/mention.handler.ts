@@ -6,6 +6,7 @@ import {
   hasActiveThreadInDb,
   recordAuditLog,
 } from "../../agent/store.js";
+import { dispatchLambdaBackgroundWorker } from "../../lambda.js";
 import { logger } from "../../utils/logger.js";
 import {
   buildSlackBlocks,
@@ -13,7 +14,7 @@ import {
   toSlackMrkdwn,
 } from "../formatter.js";
 
-interface IncomingSlackMessage {
+export interface IncomingSlackMessage {
   channel: string;
   ts: string;
   threadTs: string;
@@ -21,7 +22,7 @@ interface IncomingSlackMessage {
   user?: string;
 }
 
-async function handleAgentConversation(
+export async function handleAgentConversation(
   client: App["client"],
   msg: IncomingSlackMessage
 ): Promise<void> {
@@ -178,6 +179,20 @@ async function handleAgentConversation(
   }
 }
 
+async function routeSlackMessage(
+  client: App["client"],
+  msg: IncomingSlackMessage
+): Promise<void> {
+  // When running on AWS Lambda HTTP mode, offload to async background worker
+  // so Slack gets a 200 OK within its 3-second timeout window.
+  if (process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const dispatched = await dispatchLambdaBackgroundWorker(msg);
+    if (dispatched) return;
+  }
+
+  await handleAgentConversation(client, msg);
+}
+
 export function registerAppMentionHandler(app: App): void {
   // 1. Handle @mentions in channels and threads
   app.event("app_mention", async ({ event, client }) => {
@@ -197,7 +212,7 @@ export function registerAppMentionHandler(app: App): void {
       threadTs: effectiveThreadTs,
     });
 
-    await handleAgentConversation(client, {
+    await routeSlackMessage(client, {
       channel,
       ts,
       threadTs: effectiveThreadTs,
@@ -219,7 +234,6 @@ export function registerAppMentionHandler(app: App): void {
       subtype?: string;
     };
 
-    // Ignore bot messages, edits, deletions, and messages that already contain an @mention (handled above)
     if (
       msg.bot_id ||
       msg.subtype ||
@@ -240,7 +254,7 @@ export function registerAppMentionHandler(app: App): void {
         user: msg.user,
         ts: msg.ts,
       });
-      await handleAgentConversation(client, {
+      await routeSlackMessage(client, {
         channel: msg.channel,
         ts: msg.ts,
         threadTs: effectiveThreadTs,
@@ -250,14 +264,13 @@ export function registerAppMentionHandler(app: App): void {
       return;
     }
 
-    // If this is a reply inside an existing thread where the bot is already participating, auto-reply!
     if (msg.thread_ts && (await hasActiveThreadInDb(msg.channel, msg.thread_ts))) {
       logger.info("Received follow-up reply in active bot thread", {
         channel: msg.channel,
         user: msg.user,
         threadTs: msg.thread_ts,
       });
-      await handleAgentConversation(client, {
+      await routeSlackMessage(client, {
         channel: msg.channel,
         ts: msg.ts,
         threadTs: msg.thread_ts,

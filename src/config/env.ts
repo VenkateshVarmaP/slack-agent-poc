@@ -1,7 +1,9 @@
 export interface AppConfig {
   slack: {
     botToken: string;
-    appToken: string;
+    appToken: string | undefined;
+    signingSecret: string | undefined;
+    socketMode: boolean;
     adminUserIds: string[];
     requireApprovalForWrites: boolean;
   };
@@ -41,10 +43,16 @@ function requireEnv(name: string): string {
   return value;
 }
 
+const isLambdaRuntime = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 export const env: AppConfig = {
   slack: {
     botToken: requireEnv("SLACK_BOT_TOKEN"),
-    appToken: requireEnv("SLACK_APP_TOKEN"),
+    appToken: process.env.SLACK_APP_TOKEN,
+    signingSecret: process.env.SLACK_SIGNING_SECRET,
+    socketMode: isLambdaRuntime
+      ? false
+      : process.env.SLACK_SOCKET_MODE !== "false",
     adminUserIds: (process.env.SLACK_ADMIN_USER_IDS || "")
       .split(",")
       .map((s) => s.trim())

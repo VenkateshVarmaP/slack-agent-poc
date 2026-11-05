@@ -1,0 +1,23 @@
+# Stage 1: Build TypeScript
+FROM public.ecr.aws/lambda/nodejs:20 AS builder
+WORKDIR /var/task
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
+
+# Stage 2: AWS Lambda Container Image (Serverless HTTP Mode via ECR -> AWS Lambda)
+FROM public.ecr.aws/lambda/nodejs:20
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm install -g mcp-remote@0.1.36
+
+COPY --from=builder /var/task/dist ./dist
+COPY docs ./docs
+
+# Set the Lambda handler to dist/lambda.handler
+CMD ["dist/lambda.handler"]

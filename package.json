@@ -4,16 +4,19 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
+    "start": "node dist/index.js",
     "ingest": "tsx --env-file=.env src/rag/ingest.ts",
     "build": "tsc"
   },
   "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1162.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@slack/bolt": "^4.0.0",
     "openai": "^4.0.0",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.23.1",
     "tsx": "^4.0.0",
